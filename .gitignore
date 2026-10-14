@@ -1,0 +1,29 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Local database, backups and uploaded files
+.pgdata/
+.pgdata-test/
+uploads/
+backups/
+*.dump
+
+# Local editor / assistant settings
+.claude/
+
+# Real data files (Vehicle Master, GPS, fuel sheets). Only fake samples in samples/demo are allowed.
+*.xlsx
+*.xls
+*.csv
+!samples/demo/*
+
+# Misc
+*.log
+.DS_Store
+coverage/

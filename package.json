@@ -1,0 +1,63 @@
+{
+  "name": "lr-fleet-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LR Taxi Services fleet app: KM, fuel, mileage, documents",
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "db:start": "node scripts/local-db.js",
+    "dev": "concurrently -n server,web -c blue,green \"node --watch server/index.js\" \"vite\"",
+    "build": "prisma generate && vite build",
+    "start": "node server/index.js",
+    "start:prod": "prisma migrate deploy && node prisma/seed.js && node server/index.js",
+    "backup": "node scripts/backup.js",
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "seed": "node prisma/seed.js",
+    "demo": "node prisma/demo-data.js",
+    "test": "vitest run"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "bcrypt": "^6.0.0",
+    "connect-pg-simple": "^10.0.0",
+    "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
+    "multer": "^2.4.0",
+    "pg": "^8.23.1",
+    "prisma": "^6.19.3",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "3.25"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "concurrently": "^9.2.5",
+    "embedded-postgres": "^17.10.0-beta.17",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4",
+    "supertest": "^7.3.1",
+    "tailwindcss": "^4.3.3",
+    "vite": "^7.3.7",
+    "vitest": "^3.2.7"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "bcrypt@6.0.0": true,
+    "@embedded-postgres/windows-x64@17.10.0-beta.17": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.2": true,
+    "prisma@6.19.3": true
+  }
+}
