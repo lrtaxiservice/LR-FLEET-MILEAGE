@@ -1,0 +1,288 @@
+// LR Fleet App database. Dates without a time are stored as DATE and handled as "YYYY-MM-DD" text in the app.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  KM_USER
+  FUEL_USER
+  DOCS_USER
+  VIEWER
+}
+
+enum Ownership {
+  COMPANY
+  VENDOR
+  OFFICER
+  PERSONAL
+}
+
+enum FuelType {
+  PETROL
+  DIESEL
+  CNG_PETROL
+  CNG
+  ELECTRIC
+}
+
+enum Category {
+  COMMERCIAL
+  PRIVATE
+}
+
+enum VehicleStatus {
+  ACTIVE
+  WORKSHOP
+  IDLE
+  SOLD
+}
+
+enum KmSource {
+  UPLOAD
+  MANUAL
+}
+
+enum CorrectionType {
+  FUEL_EDIT
+  FUEL_DELETE
+  KM_EDIT
+  KM_DELETE
+  KM_REPLACE
+}
+
+enum CorrectionState {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                 Int      @id @default(autoincrement())
+  username           String   @unique
+  name               String
+  passwordHash       String   @map("password_hash")
+  role               Role
+  active             Boolean  @default(true)
+  mustChangePassword Boolean  @default(true) @map("must_change_password")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  kmUploads      KmUpload[]          @relation("UploadedBy")
+  undoneUploads  KmUpload[]          @relation("UndoneBy")
+  dailyKm        DailyKm[]
+  fuelEntries    FuelEntry[]
+  requests       CorrectionRequest[] @relation("RequestedBy")
+  decisions      CorrectionRequest[] @relation("DecidedBy")
+  activity       ActivityLog[]
+
+  @@map("users")
+}
+
+// Login sessions, used by connect-pg-simple.
+model Session {
+  sid    String   @id @db.VarChar
+  sess   Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
+  @@map("session")
+}
+
+model Driver {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String?  @unique // the phone number is the driver's ID
+  createdAt DateTime @default(now()) @map("created_at")
+
+  assignments VehicleDriverHistory[]
+
+  @@map("drivers")
+}
+
+model Vendor {
+  id        Int      @id @default(autoincrement())
+  name      String
+  contact   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  vehicles Vehicle[]
+
+  @@unique([name, contact])
+  @@map("vendors")
+}
+
+model Vehicle {
+  id         Int       @id @default(autoincrement())
+  number     String    @unique // upper case, no spaces, dots or hyphens
+  make       String    // make / model, e.g. "Dzire"
+  fuelType   FuelType  @map("fuel_type")
+  modelYear  Int?      @map("model_year")
+  ownership  Ownership
+  category   Category?
+  department String?
+  vendorId   Int?      @map("vendor_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  vendor   Vendor?                @relation(fields: [vendorId], references: [id])
+  statuses VehicleStatusHistory[]
+  drivers  VehicleDriverHistory[]
+  dailyKm  DailyKm[]
+  fuel     FuelEntry[]
+
+  @@map("vehicles")
+}
+
+model VehicleStatusHistory {
+  id        Int           @id @default(autoincrement())
+  vehicleId Int           @map("vehicle_id")
+  status    VehicleStatus
+  place     String?
+  fromDate  DateTime      @map("from_date") @db.Date
+  toDate    DateTime?     @map("to_date") @db.Date
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, fromDate])
+  @@map("vehicle_status_history")
+}
+
+model VehicleDriverHistory {
+  id        Int       @id @default(autoincrement())
+  vehicleId Int       @map("vehicle_id")
+  driverId  Int       @map("driver_id")
+  govt      Boolean   @default(false)
+  fromDate  DateTime  @map("from_date") @db.Date
+  toDate    DateTime? @map("to_date") @db.Date
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driver  Driver  @relation(fields: [driverId], references: [id])
+
+  @@index([vehicleId, fromDate])
+  @@index([driverId])
+  @@map("vehicle_driver_history")
+}
+
+model KmUpload {
+  id          Int       @id @default(autoincrement())
+  fileName    String    @map("file_name")
+  fromDate    DateTime  @map("from_date") @db.Date
+  toDate      DateTime  @map("to_date") @db.Date
+  userId      Int       @map("user_id")
+  rowsSaved   Int       @default(0) @map("rows_saved")
+  rowsSkipped Int       @default(0) @map("rows_skipped")
+  summary     Json?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  undoneAt    DateTime? @map("undone_at")
+  undoneById  Int?      @map("undone_by_id")
+
+  user     User      @relation("UploadedBy", fields: [userId], references: [id])
+  undoneBy User?     @relation("UndoneBy", fields: [undoneById], references: [id])
+  rows     DailyKm[]
+
+  @@map("km_uploads")
+}
+
+model DailyKm {
+  id            Int       @id @default(autoincrement())
+  vehicleId     Int       @map("vehicle_id")
+  date          DateTime  @db.Date
+  km            Decimal   @db.Decimal(10, 2)
+  source        KmSource
+  uploadId      Int?      @map("upload_id")
+  enteredById   Int       @map("entered_by_id")
+  // When an upload replaced an earlier value, the earlier value is kept so Undo can restore it.
+  prevKm        Decimal?  @map("prev_km") @db.Decimal(10, 2)
+  prevUploadId  Int?      @map("prev_upload_id")
+  prevSource    KmSource? @map("prev_source")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  vehicle   Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  upload    KmUpload? @relation(fields: [uploadId], references: [id])
+  enteredBy User      @relation(fields: [enteredById], references: [id])
+
+  @@unique([vehicleId, date])
+  @@index([date])
+  @@map("daily_km")
+}
+
+model FuelEntry {
+  id          Int       @id @default(autoincrement())
+  vehicleId   Int       @map("vehicle_id")
+  fromDate    DateTime  @map("from_date") @db.Date
+  toDate      DateTime  @map("to_date") @db.Date
+  petrolL     Decimal?  @map("petrol_l") @db.Decimal(10, 2)
+  dieselL     Decimal?  @map("diesel_l") @db.Decimal(10, 2)
+  cngKg       Decimal?  @map("cng_kg") @db.Decimal(10, 2)
+  amount      Decimal   @db.Decimal(12, 2)
+  billNo      String?   @map("bill_no")
+  station     String?
+  remarks     String?
+  enteredById Int       @map("entered_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  enteredBy User    @relation(fields: [enteredById], references: [id])
+
+  @@index([vehicleId, fromDate])
+  @@index([fromDate, toDate])
+  @@map("fuel_entries")
+}
+
+model CorrectionRequest {
+  id          Int             @id @default(autoincrement())
+  type        CorrectionType
+  state       CorrectionState @default(PENDING)
+  targetId    Int?            @map("target_id") // fuel entry or daily km id
+  payload     Json
+  reason      String?
+  requestedBy Int             @map("requested_by")
+  decidedBy   Int?            @map("decided_by")
+  decidedAt   DateTime?       @map("decided_at")
+  decisionNote String?        @map("decision_note")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  requester User  @relation("RequestedBy", fields: [requestedBy], references: [id])
+  decider   User? @relation("DecidedBy", fields: [decidedBy], references: [id])
+
+  @@index([state])
+  @@map("correction_requests")
+}
+
+// Append-only: a database trigger blocks UPDATE, DELETE and TRUNCATE.
+model ActivityLog {
+  id        BigInt   @id @default(autoincrement())
+  at        DateTime @default(now())
+  userId    Int?     @map("user_id")
+  username  String?
+  action    String
+  entity    String?
+  entityId  String?  @map("entity_id")
+  oldValue  Json?    @map("old_value")
+  newValue  Json?    @map("new_value")
+  ip        String?
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([at])
+  @@index([entity, entityId])
+  @@map("activity_log")
+}
+
+model Setting {
+  key   String @id
+  value Json
+
+  @@map("settings")
+}
