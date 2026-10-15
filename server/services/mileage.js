@@ -2,7 +2,7 @@
 //
 // Every fuel entry is spread over the Active days of its From–To range in proportion to the KM run
 // on each day (evenly when no KM was recorded). KM and fuel are then added up for the period.
-import { eachDay, toDb, fromDb } from '../lib/dates.js';
+import { eachDay, toDb, fromDb, todayIST } from '../lib/dates.js';
 import { num } from '../lib/db.js';
 import { getSettings } from '../lib/settings.js';
 import { loadTimelines, fuelEligible, driverOn, statusOn } from './timeline.js';
@@ -155,6 +155,7 @@ export async function mileageReport(db, from, to, { mode = 'custom' } = {}) {
   const perVehicle = new Map();
   for (const r of days.values()) (perVehicle.get(r.vehicleId) || perVehicle.set(r.vehicleId, []).get(r.vehicleId)).push(r);
 
+  const today = todayIST();
   const rows = [];
   const others = [];
   for (const v of vehicles) {
@@ -176,7 +177,8 @@ export async function mileageReport(db, from, to, { mode = 'custom' } = {}) {
       });
       continue;
     }
-    const activeDays = [...eachDay(from, to)].filter((d) => fuelEligible(v, t, d)).length;
+    const lastDay = to > today ? today : to; // days still to come are not counted
+    const activeDays = from > lastDay ? 0 : [...eachDay(from, lastDay)].filter((d) => fuelEligible(v, t, d)).length;
     const elig = list.filter((r) => r.eligible || r.fills > 0);
     const r = { vehicleId: v.id, number: v.number, make: v.make, fuelType: v.fuelType, department: v.department, activeDays, km: 0, petrol: 0, diesel: 0, cng: 0, amount: 0, fills: 0, multiDay: false };
     for (const d of elig) {

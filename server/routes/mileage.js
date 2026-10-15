@@ -34,8 +34,10 @@ r.get(
   '/',
   h(async (req, res) => {
     const p = period(req.query);
-    const [report, missing] = await Promise.all([mileageReport(prisma, p.from, p.to, p), missingGpsDays(prisma, p.from, p.to > todayIST() ? todayIST() : p.to)]);
-    res.json({ ...report, missingGpsDays: p.from > todayIST() ? [] : missing });
+    // Today's GPS report is not ready yet, so only days up to yesterday can be missing.
+    const lastDay = addDays(todayIST(), -1);
+    const [report, missing] = await Promise.all([mileageReport(prisma, p.from, p.to, p), p.from > lastDay ? [] : missingGpsDays(prisma, p.from, p.to > lastDay ? lastDay : p.to)]);
+    res.json({ ...report, missingGpsDays: missing });
   }),
 );
 

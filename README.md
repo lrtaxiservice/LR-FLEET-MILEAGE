@@ -47,6 +47,9 @@ You need this once: **Node.js** (the LTS version) and **Git**. Both are already 
 
 Next time, you only need step 4 (`npm run db:start`) and then `npm start` in the second window.
 
+### Practice files
+`samples/demo/` has a fake Vehicle Master and a fake GPS report (1–3 October 2026) to try the upload screens. Make them again with `node scripts/make-samples.js`.
+
 ### Run the automated tests
 ```bash
 npm test
